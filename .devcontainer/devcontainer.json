@@ -1,0 +1,48 @@
+{
+    "name": "Python development environment",
+    "context": "..",
+    "dockerFile": "Dockerfile",
+
+    // Comment out the next line to run as root instead.
+    "remoteUser": "vscode",
+
+    "forwardPorts": [3000, 4000],
+
+    // Use 'settings' to set *default* container specific settings.json values on container create.
+    // You can edit these settings after create using File > Preferences > Settings > Remote.
+    "settings": {
+        "terminal.integrated.shell.linux": "/usr/bin/fish",
+        "python.pythonPath": "/usr/local/bin/python",
+		"python.linting.enabled": true,
+		"python.linting.pylintEnabled": true,
+		"python.linting.pylintPath": "/usr/local/share/pip-global/bin/pylint"
+    },
+
+    "mounts": [
+        // Bring SSH keys into the container
+        "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,consistency=cached",
+        // Bring DBT config into the container
+        "source=${localEnv:HOME}/.dbt,target=/home/vscode/.dbt,type=bind,consistency=cached",
+        // Bring misc files into the container
+        "source=${localEnv:HOME}/.bernie,target=/home/vscode/.bernie,type=bind,consistency=cached",
+        // Share XDG_DATA_HOME with the host environment
+        "source=${localWorkspaceFolder}/.devcontainer/datahome,target=/datahome,type=bind,consistency=cached",
+        // Share AWS credentials with the host environment
+        "source=${localEnv:HOME}/.aws,target=/home/vscode/.aws,type=bind,consistency=cached"
+    ],
+
+    // Specifies a command that should be run after the container has been created.
+    "postCreateCommand": "pip install -r requirements.txt",
+
+    // Run with the local dev environment variables
+    "runArgs": ["--env-file", ".devcontainer/devcontainer.env"],
+
+    // Add the IDs of extensions you want installed when the container is created in the array below.
+    "extensions": [
+        "ms-python.python",
+        "dakara.transformer",
+        "ms-azuretools.vscode-docker",
+        "ms-ossdata.vscode-postgresql",
+        "samuelcolvin.jinjahtml"
+    ]
+}
