@@ -1,5 +1,4 @@
-# Container: https://platform.civisanalytics.com/spa/#/scripts/containers/67174246
-# '/app/pipeline-etl/matching/match-pipeline-params.R'
+# Container: Add link to matching pipeline container
 
 config_path <- Sys.getenv('CONFIG_PATH')
 source(config_path)
@@ -13,6 +12,8 @@ input_table <- input_table_param$table
 
 output_schema <- output_table_param$schema
 output_table <- output_table_param$table
+
+db_name <- 'DB Name' # Fill in the name of your civis database here
 
 # Functions ---------------------------------------------------------------
 
@@ -55,7 +56,7 @@ dedupe_match_table <- function(input_schema_table = NULL,
   cat(match_output_sql,file="sql.sql")
   cat(match_output_sql)
   
-  match_output_status <- civis::query_civis(x=sql(match_output_sql), database = 'Bernie 2020') 
+  match_output_status <- civis::query_civis(x=sql(match_output_sql), database = db_name) 
   
   return(match_output_status)
 }
@@ -70,15 +71,15 @@ drop_tables_sql <- paste0('\ndrop table if exists ',paste0(output_schema,'.',inp
 \ndrop table if exists ',paste0(output_schema,'.',input_table,'_stage_5_coalesce'),';
 \ndrop table if exists ',paste0(output_schema,'.',input_table,'_stage_6_match2'),';
 \ndrop table if exists ',paste0(output_schema,'.',input_table,'_stage_7_fullmatch'),';')
-drop_table_status <- civis::query_civis(x=sql(drop_tables_sql), database = 'Bernie 2020')
+drop_table_status <- civis::query_civis(x=sql(drop_tables_sql), database = db_name)
 
 # Setup Initial Table ----------------------------------------------------
 
 # Check if final table exists and if so take records below rematch threshold from previous run
-cass_row_count <- civis::read_civis(x=sql(paste0('select count(*) from ',input_schema,'.',input_table)), database = 'Bernie 2020')   
-check_if_cass_table_exists <- civis::read_civis(x=sql(paste0("select count(*) from information_schema.tables where table_schema = '",output_schema,"' and table_name = '",paste0(input_table,'_stage_cass'),"';")), database = 'Bernie 2020')
+cass_row_count <- civis::read_civis(x=sql(paste0('select count(*) from ',input_schema,'.',input_table)), database = db_name)   
+check_if_cass_table_exists <- civis::read_civis(x=sql(paste0("select count(*) from information_schema.tables where table_schema = '",output_schema,"' and table_name = '",paste0(input_table,'_stage_cass'),"';")), database = db_name)
 if (check_if_cass_table_exists$count == 1) {
-  cass_clean_row_count <- civis::read_civis(x=sql(paste0('select count(*) from ',output_schema,'.',input_table,'_stage_cass')), database = 'Bernie 2020')
+  cass_clean_row_count <- civis::read_civis(x=sql(paste0('select count(*) from ',output_schema,'.',input_table,'_stage_cass')), database = db_name)
   cass_row_count <- abs(cass_row_count - cass_clean_row_count)
 }
 
@@ -87,7 +88,7 @@ if (ceiling((cass_row_count$count/250000)/5) > 3) {
 } else {
         parallel_chunks <- ceiling((cass_row_count$count/250000)/5)
 }
-check_if_final_table_exists <- civis::read_civis(x=sql(paste0("select count(*) from information_schema.tables where table_schema = '",output_schema,"' and table_name = '",output_table,"';")), database = 'Bernie 2020')
+check_if_final_table_exists <- civis::read_civis(x=sql(paste0("select count(*) from information_schema.tables where table_schema = '",output_schema,"' and table_name = '",output_table,"';")), database = db_name)
 if (check_if_final_table_exists$count == 1) {
         match_universe <- paste0("(select *, ntile(",parallel_chunks,") over (order by random()) as chunk from ",paste0(input_schema,'.',input_table)," 
                                  left join (select ",pii_param$primary_key,", score from ",output_schema,'.',output_table,") using(",pii_param$primary_key,") where score < ",rematch_threshold," or score is null)")
@@ -98,7 +99,7 @@ if (check_if_final_table_exists$count == 1) {
 input_table_sql <- paste0('drop table if exists ',paste0(output_schema,'.',input_table,'_stage_0_input'),';
                           create table ',paste0(output_schema,'.',input_table,'_stage_0_input'),
                           ' distkey(',pii_param$primary_key,') sortkey(',pii_param$primary_key,') as ',match_universe,';') 
-input_table_status <- civis::query_civis(x=sql(input_table_sql), database = 'Bernie 2020') 
+input_table_status <- civis::query_civis(x=sql(input_table_sql), database = db_name) 
 
 # Person Match  -----------------------------------------------------------
 
@@ -107,10 +108,10 @@ match_job_civis <- civis::enhancements_post_civis_data_match(name = paste0('Civi
                                                              input_field_mapping = compact(pii_param),
                                                              match_target_id = civis::match_targets_list()[[1]]$id, # Civis Voterfile = 1, DNC = 2
                                                              parent_id = NULL,
-                                                             input_table = list(databaseName = 'Bernie 2020',
+                                                             input_table = list(databaseName = db_name,
                                                                                 schema = output_schema,
                                                                                 table = paste0(input_table,'_stage_0_input')),
-                                                             output_table = list(databaseName = 'Bernie 2020',
+                                                             output_table = list(databaseName = db_name,
                                                                                  schema = output_schema,
                                                                                  table = paste0(input_table,'_stage_1_match1')),
                                                              max_matches = matches_per_id,
@@ -136,7 +137,7 @@ deduped_status
 if (enable_cass == TRUE) {  
         
         # Create table of below threshold matches to run through CASS and rematch again
-        check_if_cass_table_exists <- civis::read_civis(x=sql(paste0("select count(*) from information_schema.tables where table_schema = '",output_schema,"' and table_name = '",paste0(input_table,'_stage_cass'),"';")), database = 'Bernie 2020')
+        check_if_cass_table_exists <- civis::read_civis(x=sql(paste0("select count(*) from information_schema.tables where table_schema = '",output_schema,"' and table_name = '",paste0(input_table,'_stage_cass'),"';")), database = db_name)
         if (check_if_cass_table_exists$count == 1) {
                 cass_universe <- paste0('(select input0.* from ',output_schema,'.',input_table,'_stage_0_input input0 
                                         left join 
@@ -151,7 +152,7 @@ if (enable_cass == TRUE) {
                                         where input2.',pii_param$primary_key,' is null)')
         }
         rematch_table_sql <- paste0('create table ',output_schema,'.',input_table,'_stage_3_rematch as ',cass_universe,';')
-        rematch_table_status <- civis::query_civis(x=sql(paste0(rematch_table_sql)), database = 'Bernie 2020') 
+        rematch_table_status <- civis::query_civis(x=sql(paste0(rematch_table_sql)), database = db_name) 
         rematch_table_status
         
         # Submit CASS jobs in parallel
@@ -163,7 +164,7 @@ if (enable_cass == TRUE) {
                 clean_job <- civis::enhancements_post_cass_ncoa(name = paste0('CASS Job Chunk ',chunk_i,': ',input_schema,'.',input_table), 
                                                                 source = list(databaseTable = list(schema = output_schema,
                                                                                                    table = paste0(input_table,'_stage_3_rematch'),
-                                                                                                   remoteHostId = get_database_id('Bernie 2020'),
+                                                                                                   remoteHostId = get_database_id(db_name),
                                                                                                    credentialId = default_credential(),
                                                                                                    multipartKey = list(pii_param$primary_key))),
                                                                 destination = list(databaseTable = list(schema = output_schema,
@@ -196,7 +197,7 @@ if (enable_cass == TRUE) {
         # Pull down all CASS tables that exist
         cass_tables_sql <- paste0("select tab.table_schema, tab.table_name, tinf.tbl_rows as table_rows from svv_tables tab join svv_table_info tinf on tab.table_schema = tinf.schema and tab.table_name = tinf.table where tab.table_schema = '", 
                                   output_schema,"' and tab.table_name similar to '%",input_table,"%' and tab.table_name similar to '%_stage_4_cass_%' and tab.table_schema not in('pg_catalog','information_schema') order by tinf.tbl_rows desc;")
-        cass_tables_df <- read_civis(x = sql(cass_tables_sql), database = 'Bernie 2020')
+        cass_tables_df <- read_civis(x = sql(cass_tables_sql), database = db_name)
         cass_tables_to_union <- cass_tables_df %>% filter(table_rows > 0) 
         
         # Union tables with more than 1 row (sometimes CASS jobs fail but successfully export a table)
@@ -208,7 +209,7 @@ if (enable_cass == TRUE) {
         }
         cass_union_sql <- paste0('create table ',paste0(output_schema,'.',input_table,'_stage_4_cass'),' as (select * from ',paste(cass_union_sql, collapse = ' union all '),');')
         cat(cass_union_sql ,file="sql.sql")
-        cass_union_status <- civis::query_civis(x=sql(cass_union_sql), database = 'Bernie 2020') 
+        cass_union_status <- civis::query_civis(x=sql(cass_union_sql), database = db_name) 
         
         # Drop all intermediary chunked CASS tables
         for (cass_tbl in unique(cass_tables_df$table_name)) {
@@ -217,7 +218,7 @@ if (enable_cass == TRUE) {
         }
         cass_drop_sql <- paste(cass_drop_sql, collapse = ' ')
         cat(cass_drop_sql, file="sql.sql")
-        cass_drop_status <- civis::query_civis(x=sql(cass_drop_sql), database = 'Bernie 2020') 
+        cass_drop_status <- civis::query_civis(x=sql(cass_drop_sql), database = db_name) 
         
         # Coalesce CASS table with input table's PII
         coalesce_columns_sql <- c()
@@ -282,18 +283,18 @@ if (enable_cass == TRUE) {
         match_input_sql <- paste0('drop table if exists ',paste0(output_schema,'.',input_table,'_stage_5_coalesce'),';
                           create table ',paste0(output_schema,'.',input_table,'_stage_5_coalesce'),' distkey(',pii_param$primary_key,') sortkey(',pii_param$primary_key,') as ',coalesce_table_sql,';')  
         cat(match_input_sql,file="sql.sql")
-        match_input_status <- civis::query_civis(x=sql(match_input_sql), database = 'Bernie 2020') 
+        match_input_status <- civis::query_civis(x=sql(match_input_sql), database = db_name) 
         match_input_status
         
         # Insert into exsiting or create new CASS results table
         if (check_if_cass_table_exists$count == 1) {
           cass_save_sql <- paste0('insert into  ',paste0(output_schema,'.',input_table,'_stage_cass'),' (select *, getdate()::date as cass_date from ',paste0(output_schema,'.',input_table,'_stage_5_coalesce'),');')
           cat(cass_save_sql ,file="sql.sql")
-          cass_save_status <- civis::query_civis(x=sql(cass_save_sql), database = 'Bernie 2020') 
+          cass_save_status <- civis::query_civis(x=sql(cass_save_sql), database = db_name) 
         } else {
           cass_save_sql <- paste0('create table ',paste0(output_schema,'.',input_table,'_stage_cass'),' as (select *, getdate()::date as cass_date from ',paste0(output_schema,'.',input_table,'_stage_5_coalesce'),');')
           cat(cass_save_sql ,file="sql.sql")
-          cass_save_status <- civis::query_civis(x=sql(cass_save_sql), database = 'Bernie 2020') 
+          cass_save_status <- civis::query_civis(x=sql(cass_save_sql), database = db_name) 
         }
 
         # Person Match --------------------------------------------------------
@@ -303,10 +304,10 @@ if (enable_cass == TRUE) {
                                                                      input_field_mapping = compact(pii_param),
                                                                      match_target_id = civis::match_targets_list()[[1]]$id, # Civis Voterfile = 1, DNC = 2
                                                                      parent_id = NULL,
-                                                                     input_table = list(databaseName = 'Bernie 2020',
+                                                                     input_table = list(databaseName = db_name,
                                                                                         schema = output_schema,
                                                                                         table = paste0(input_table,'_stage_5_coalesce')),
-                                                                     output_table = list(databaseName = 'Bernie 2020',
+                                                                     output_table = list(databaseName = db_name,
                                                                                          schema = output_schema,
                                                                                          table = paste0(input_table,'_stage_6_match2')),
                                                                      max_matches = matches_per_id,
@@ -358,7 +359,7 @@ complete_table_sql <- paste0('drop table if exists ',output_schema,'.',output_ta
                              cass_rematch, 
                              existing_universe, ')) where best_record_rank = 1);')
 
-complete_table_status <- civis::query_civis(x=sql(complete_table_sql), database = 'Bernie 2020') 
+complete_table_status <- civis::query_civis(x=sql(complete_table_sql), database = db_name) 
 complete_table_status
 
 # Output matched table with only records above cutoff_threshold
@@ -366,7 +367,7 @@ final_table_sql <- paste0('drop table if exists ',output_schema,'.',output_table
                           create table ',output_schema,'.',output_table,' distkey(',pii_param$primary_key,') sortkey(',pii_param$primary_key,') as 
                           (select * from ',output_schema,'.',output_table,'_all_matches);')
 
-final_table_status <- civis::query_civis(x=sql(final_table_sql), database = 'Bernie 2020') 
+final_table_status <- civis::query_civis(x=sql(final_table_sql), database = db_name) 
 final_table_status
 
 #Drop staging tables
@@ -378,4 +379,4 @@ drop_tables_sql <- paste0('\ndrop table if exists ',paste0(output_schema,'.',inp
 \ndrop table if exists ',paste0(output_schema,'.',input_table,'_stage_5_coalesce'),';
 \ndrop table if exists ',paste0(output_schema,'.',input_table,'_stage_6_match2'),';
 \ndrop table if exists ',paste0(output_schema,'.',input_table,'_stage_7_fullmatch'),';')
-drop_table_status <- civis::query_civis(x=sql(drop_tables_sql), database = 'Bernie 2020')
+drop_table_status <- civis::query_civis(x=sql(drop_tables_sql), database = db_name)
