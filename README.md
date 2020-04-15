@@ -20,10 +20,11 @@ The matching pipeline automates a process to match personal information from an 
 
 ### [Civis Audit](https://github.com/Bernie-2020/civis-jobs-public/tree/master/civis_jobs/tools/civis)
 
-While Civis Platform offers the ability to easily orchestrate and schedule jobs and workflows, it is not as easy to monitor them. The audit was developed to monitor scheduled workflows and other key unscheduled workflows to make it easier to quickly identify failures. We ran this job every 30 minutes.
+While Civis Platform offers the ability to easily orchestrate and schedule jobs and workflows, it is not as easy to monitor them. The audit was developed to monitor scheduled workflows and other key unscheduled workflows to make it easier to quickly identify workflow and job failures. We ran this job every 30 minutes and exported output to a google sheet.
 
-### NGPAN Pipelines
+### [NGPVAN Pipelines](https://github.com/Bernie-2020/civis-jobs-public/tree/master/civis_jobs/tools/ngpvan)
 
+Civis Platform has built in infrastructure to load data from platform into NGPVAN. We built a number of pipelines around this functionality to make sure that data collected from other sources was recorded in state VAN committees and provide a selection of those pipelines here. 
 
 ## Authors 
 While there were many contributors to this repository over time, the leaders and members of the data engineering team were the primary contributors. Thank you for your hard work.
